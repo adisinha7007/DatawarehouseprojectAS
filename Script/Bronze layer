@@ -1,1 +1,26 @@
+Building Bronze layer
+
+- Analyse source system
+
+1- Business context and ownership
+Who owns the data?
+What business process does it supports?
+System and Data documentation
+Data model and data catalogue
+
+
+2-Architecture and Technology stack
+How is data stored? SQl server, Oracle , AWS, Azure….. etc
+What are the integration capabilities?- APIs, Kafka, File extract, Direct DB…. etc
+
+3- Extract and Load
+Incremental vs Full load?
+Data scope and historical needs
+What is the expected size of the extracts?
+Are there any data volume limitations?
+How to avoid impacting the source system’s performance?
+Authentication and authorisation(tokens, SSH keys, VPN etc)
+
+
+Since our analysis has been performed on big query hence there are no DDL activities done. The extract has directly been taken from csv and imported to bug query.
 
