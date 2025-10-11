@@ -1,1 +1,24 @@
+Contents-
+
+1- Dataset source-
+ - CRM 
+ - ERP 
+2- Documents
+- Project plan- Built in notion- https://www.notion.so/Data-warehouse-project-279c4b7b37628039b878cae2a0b3c7d8
+
+- Data architecture
+- Data catalogue
+- Data flow
+- Data_integration
+- Data layers
+- Data model
+- naming conventions
+- Project notes
+3- scripts/code
+- Bronze
+- Silver
+- Gold
+
+
+All the scripts also has the quality check codes.
 
