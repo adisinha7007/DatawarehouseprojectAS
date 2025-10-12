@@ -1,1 +1,391 @@
+Building silver layer-
+
+
+
+
+When analysing the data, go through each table, check for size, number of rows in the details section to understand the volume of data.
+Then check for the column and their types. See if the column type is correct with respect to the data it has like date having date instead of integer etc. Now check for the first 1000 data rows of each table and scan through the details. 
+While scanning especially check for the columns which will help in joining tables. Also check if there is no major fault in the dataset like complete column showing null etc. 
+Now when the analysis is completed, make an integration model on how will the tables be joined as in the column keys and the relation between different tables as shown below.
+
+
+
+
+
+Data cleaning- customer info table
+
+1- Check for nulls and duplicates in primary key   l   Expectation- No result
+
+- A primary key must be unique and not null
+
+
+
+
+Select 
+cst_id,
+count(*)
+From datawarehouseproject-473210.CRM.cst_info
+Group by cst_id
+Having count(*) >1 or cst_id is null
+
+This query checks for duplicates and if duplicates are found then we rank it to get the latest record from those duplicates.
+
+SELECT *,
+ ROW_NUMBER() OVER(
+   PARTITION BY cst_id
+   ORDER BY cst_create_date DESC
+ ) AS row_num
+FROM `datawarehouseproject-473210.CRM.cst_info`)
+
+
+
+
+2- Check for unwanted spaces-
+
+
+SELECT
+cst_firstname
+from datawarehouseproject-473210.CRM.cst_info
+where cst_firstname != trim(cst_firstname)
+
+Same query can be repeated to check for any leading or lagging spaces in last name of customers
+
+
+3- Check for Data standarization and consistency-
+
+
+To check the cardinality of gender column
+
+
+SELECT
+distinct cst_gndr
+from datawarehouseproject-473210.CRM.cst_info
+
+
+To check the cardinality of gender column
+
+
+SELECT
+distinct cst_marital_status
+from datawarehouseproject-473210.CRM.cst_info
+Use case when statements to make it consistent-
+
+
+The final script for cleaning the whole customer info table in big query
+
+
+
+WITH ranked AS (
+ SELECT
+   *,
+   ROW_NUMBER() OVER (PARTITION BY cst_id ORDER BY cst_create_date DESC) AS flag_last
+ FROM `datawarehouseproject-473210.CRM.cst_info`
+ WHERE cst_id IS NOT NULL
+)
+SELECT
+ cst_id,
+ cst_key,
+ TRIM(cst_firstname) AS cst_firstname,
+ TRIM(cst_lastname) AS cst_lastname,
+ CASE
+   WHEN UPPER(TRIM(cst_marital_status)) = 'S' THEN 'Single'
+   WHEN UPPER(TRIM(cst_marital_status)) = 'M' THEN 'Married'
+   ELSE 'n/a'
+ END AS cst_marital_status,
+ CASE
+   WHEN UPPER(TRIM(cst_gndr)) = 'F' THEN 'Female'
+   WHEN UPPER(TRIM(cst_gndr)) = 'M' THEN 'Male'
+   ELSE 'n/a'
+ END AS cst_gndr,
+ cst_create_date
+FROM ranked
+WHERE flag_last = 1;
+
+
+
+
+
+
+Data cleaning- customer info table
+
+1- Check for nulls and duplicates in primary key   l   Expectation- No result
+
+- A primary key must be unique and not null
+
+
+
+
+Select
+prd_id,
+count(*)
+From datawarehouseproject-473210.CRM.prd_info
+Group by prd_id
+Having count(*)>1 OR prd_id is null
+
+
+2- Check for the joining column and if it needs any alteration or modification
+
+3- Check for unwanted spaces using trim function
+
+4- Check for nulls or negative numbers and address them
+
+SELECT
+prd_cost
+FROM
+datawarehouseproject-473210.CRM.prd_info
+where prd_cost < 0 OR prd_cost is null;
+
+5- Check for invalid date (end date must not be earlier than the start date)
+
+
+SELECT *
+FROM
+datawarehouseproject-473210.CRM.prd_info
+where prd_end_dt < prd_start_dt;
+
+
+6- Check for data standardization and consistency
+
+The final script for cleaning the whole product info table in big query
+
+SELECT
+ prd_id,
+ REPLACE(SUBSTR(prd_key, 1, 5), '-', '_') AS cat_id,
+ SUBSTR(prd_key, 7) AS prd_key,
+ prd_nm,
+ IFNULL(prd_cost, 0) AS prd_cost,
+ CASE
+   WHEN UPPER(TRIM(prd_line)) = 'M' THEN 'Mountain'
+   WHEN UPPER(TRIM(prd_line)) = 'R' THEN 'Road'
+   WHEN UPPER(TRIM(prd_line)) = 'S' THEN 'Other Sales'
+   WHEN UPPER(TRIM(prd_line)) = 'T' THEN 'Touring'
+   ELSE 'n/a'
+ END AS prd_line,
+ CAST(prd_start_dt AS DATE) AS prd_start_dt,
+ CAST(DATE_SUB(LEAD(CAST(prd_start_dt AS DATE)) OVER
+     (PARTITION BY SUBSTR(prd_key, 7) ORDER BY CAST(prd_start_dt AS DATE)), INTERVAL 1 DAY) AS DATE) AS prd_end_dt
+FROM
+ `datawarehouseproject-473210.CRM.prd_info`;
+
+
+
+
+Data cleaning- sales table
+
+
+1- Check for unwanted spaces in order number through trim function
+
+Select *
+From datawarehouseproject-473210.CRM.crm_sales
+Where sls_ord_num != trim(sls_ord_num)
+
+
+2- Check for data integrity 
+
+Select *
+From datawarehouseproject-473210.CRM.crm_sales
+Where sls_cust_id NOT IN ( Select cst_id from datawarehouseproject-473210.CRM.silver_cst_info)
+
+
+Select *
+From datawarehouseproject-473210.CRM.crm_sales
+Where sls_prd_key NOT IN ( Select prd_key from datawarehouseproject-473210.CRM.silver_prd_info)
+
+
+2- Check for invalid dates-
+
+SELECT
+ sls_order_dt
+FROM
+ `datawarehouseproject-473210.CRM.crm_sales`
+WHERE
+ SAFE_CAST(sls_order_dt AS INT64) IS NULL
+ OR SAFE_CAST(sls_order_dt AS INT64) <= 0
+ OR LENGTH(CAST(sls_order_dt AS STRING)) != 8
+ OR SAFE_CAST(sls_order_dt AS INT64) > 20500101
+ OR SAFE_CAST(sls_order_dt AS INT64) < 19000101;
+
+
+Apply same to ship date and due date
+
+SELECT
+ sls_ship_dt
+FROM
+ `datawarehouseproject-473210.CRM.crm_sales`
+WHERE
+ SAFE_CAST(sls_ship_dt AS INT64) IS NULL
+ OR SAFE_CAST(sls_ship_dt AS INT64) <= 0
+ OR LENGTH(CAST(sls_ship_dt AS STRING)) != 8
+ OR SAFE_CAST(sls_ship_dt AS INT64) > 20500101
+ OR SAFE_CAST(sls_ship_dt AS INT64) < 19000101;
+
+SELECT
+ sls_due_dt
+FROM
+ `datawarehouseproject-473210.CRM.crm_sales`
+WHERE
+ SAFE_CAST(sls_due_dt AS INT64) IS NULL
+ OR SAFE_CAST(sls_due_dt AS INT64) <= 0
+ OR LENGTH(CAST(sls_due_dt AS STRING)) != 8
+ OR SAFE_CAST(sls_due_dt AS INT64) > 20500101
+ OR SAFE_CAST(sls_due_dt AS INT64) < 19000101;
+
+
+3- Check data consistency between sales price and quantity
+>> Sales= Quantity*price
+>> Values must not be null, zero or negative
+
+SELECT
+sls_sales,
+sls_quantity,
+sls_price,
+from datawarehouseproject-473210.CRM.crm_sales
+where sls_sales != sls_quantity * sls_price
+OR sls_sales is null or sls_quantity is null or sls_price is null
+OR sls_sales <=0 or sls_quantity <=0 or sls_price <=0;
+
+
+
+Rules-
+
+If sales is negative, null or zero then derive it from quantity and price 
+If price is zero or null then derive it from quantity and sales and if it is negative then make it positive
+
+
+The final script for cleaning the whole sales info table in big query
+
+
+SELECT
+ sls_ord_num,
+ sls_prd_key,
+ sls_cust_id,
+ CASE
+   WHEN sls_order_dt = 0 OR LENGTH(CAST(sls_order_dt AS STRING)) != 8 THEN NULL
+   ELSE SAFE.PARSE_DATE('%Y%m%d', CAST(sls_order_dt AS STRING))
+ END AS sls_order_dt,
+ CASE
+   WHEN sls_ship_dt = 0 OR LENGTH(CAST(sls_ship_dt AS STRING)) != 8 THEN NULL
+   ELSE SAFE.PARSE_DATE('%Y%m%d', CAST(sls_ship_dt AS STRING))
+ END AS sls_ship_dt,
+ CASE
+   WHEN sls_due_dt = 0 OR LENGTH(CAST(sls_due_dt AS STRING)) != 8 THEN NULL
+   ELSE SAFE.PARSE_DATE('%Y%m%d', CAST(sls_due_dt AS STRING))
+ END AS sls_due_dt,
+ CASE
+   WHEN sls_sales IS NULL OR sls_sales <= 0 OR sls_sales != sls_quantity * ABS(sls_price)
+     THEN sls_quantity * ABS(sls_price)
+   ELSE sls_sales
+ END AS sls_sales,
+ sls_quantity,
+ CASE
+   WHEN sls_price IS NULL OR sls_price <= 0
+     THEN sls_sales / NULLIF(sls_quantity, 0)
+   ELSE sls_price
+ END AS sls_price
+FROM `datawarehouseproject-473210.CRM.crm_sales`;
+
+
+
+Data cleaning- customer table- ERP
+
+1- Check if the columns that we are going to join match. If not then transform accordingly
+2- Check the validity of dates and consistency in gender.
+
+SELECT
+bdate
+from datawarehouseproject-473210.ERP.cust_az
+where bdate > current_date() or bdate < '1924-01-01'
+
+SELECT
+distinct gen
+from datawarehouseproject-473210.ERP.cust_az
+
+
+The final script for cleaning the whole customer info erp table in big query
+
+SELECT
+ CASE
+   WHEN STARTS_WITH(cid, 'NAS') THEN SUBSTR(cid, 4)
+   ELSE cid
+ END AS cid,
+ CASE
+   WHEN bdate > CURRENT_DATE() THEN NULL
+   ELSE bdate
+ END AS bdate,
+ CASE
+   WHEN UPPER(TRIM(gen)) IN ('F', 'FEMALE') THEN 'Female'
+   WHEN UPPER(TRIM(gen)) IN ('M', 'MALE') THEN 'Male'
+   ELSE 'n/a'
+ END AS gen
+FROM `datawarehouseproject-473210.ERP.cust_az`;
+
+
+
+
+
+Data cleaning- location table- ERP
+
+1- Check for joining columns data consistency
+
+2- Check for data standardization and consistency
+
+SELECT
+distinct cntry
+from datawarehouseproject-473210.ERP.loc_a101
+ORDER BY cntry
+
+The final script for cleaning the whole location info erp table in big query
+
+
+SELECT
+ REPLACE(cid, '-', '') AS cid,
+ CASE
+   WHEN TRIM(cntry) = 'DE' THEN 'Germany'
+   WHEN TRIM(cntry) IN ('US', 'USA') THEN 'United States'
+   WHEN TRIM(cntry) = '' OR cntry IS NULL THEN 'n/a'
+   ELSE TRIM(cntry)
+ END AS cntry
+FROM
+
+Data cleaning- product category table- ERP
+
+
+1- Check for unwanted spaces
+
+ Select
+*
+ from datawarehouseproject-473210.ERP.px_cat
+ where cat != trim(cat) or subcat != trim(subcat);
+
+1- Check for data standardization and consistency
+
+
+
+ Select
+distinct(MAINTENANCE)
+ from datawarehouseproject-473210.ERP.px_cat
+The final script for cleaning the whole product category info erp table in big query
+
+
+SELECT
+   id,
+   cat,
+   subcat,
+   maintenance
+ FROM `datawarehouseproject-473210.ERP.px_cat`;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
