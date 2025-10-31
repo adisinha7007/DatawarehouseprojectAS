@@ -22,5 +22,5 @@ How to avoid impacting the source system’s performance?
 Authentication and authorisation(tokens, SSH keys, VPN etc)
 
 
-Since our analysis has been performed on big query hence there are no DDL activities done. The extract has directly been taken from csv and imported to bug query.
+Since our analysis has been performed on big query hence there are no DDL activities done. The extract has directly been taken from csv and imported to big query.
 
